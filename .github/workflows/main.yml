@@ -26,7 +26,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           validate-wrappers: true
-          cache-cleanup: true
+          cache-cleanup: on-success
 
       - name: Change wrapper permissions
         run: chmod +x ./gradlew
