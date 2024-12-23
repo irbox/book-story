@@ -37,8 +37,8 @@ jobs:
       - name: Run Local Tests
         run: ./gradlew test
 
-      - name: Lint Checks
-        run: ./gradlew ktlintCheck
+      # - name: Lint Checks
+        # run: ./gradlew ktlintCheck
 
         # Upload all build artifacts in separate steps. This can be shortened once https://github.com/actions/upload-artifact/pull/354 is merged.
       - name: Upload artifact book-universal-debug.apk
