@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import ua.acclorite.book_story.R
 import ua.acclorite.book_story.domain.reader.Chapter
 import ua.acclorite.book_story.domain.reader.FontWithName
+import ua.acclorite.book_story.domain.reader.ReaderHorizontalGesture
 import ua.acclorite.book_story.domain.reader.ReaderTextAlignment
 import ua.acclorite.book_story.presentation.core.components.common.LazyColumnWithScrollbar
 import ua.acclorite.book_story.presentation.core.components.common.SelectionContainer
@@ -38,6 +39,9 @@ fun ReaderLayout(
     listState: LazyListState,
     contentPadding: PaddingValues,
     verticalPadding: Dp,
+    horizontalGesture: ReaderHorizontalGesture,
+    horizontalGestureScroll: Float,
+    horizontalGestureSensitivity: Dp,
     paragraphHeight: Dp,
     sidePadding: Dp,
     backgroundColor: Color,
@@ -124,7 +128,14 @@ fun ReaderLayout(
                     } else Modifier
                 )
                 .padding(contentPadding)
-                .padding(vertical = verticalPadding),
+                .padding(vertical = verticalPadding)
+                .readerHorizontalGesture(
+                    listState = listState,
+                    horizontalGesture = horizontalGesture,
+                    horizontalGestureScroll = horizontalGestureScroll,
+                    horizontalGestureSensitivity = horizontalGestureSensitivity,
+                    isLoading = isLoading
+                ),
             verticalArrangement = Arrangement.spacedBy(paragraphHeight),
             contentPadding = PaddingValues(
                 top = (WindowInsets.displayCutout.asPaddingValues()

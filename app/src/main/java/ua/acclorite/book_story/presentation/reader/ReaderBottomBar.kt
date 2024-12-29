@@ -5,7 +5,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -17,11 +19,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import ua.acclorite.book_story.R
 import ua.acclorite.book_story.domain.library.book.Book
@@ -44,6 +46,7 @@ fun ReaderBottomBar(
     currentChapter: Chapter?,
     currentChapterProgress: Float,
     checkpoint: Checkpoint,
+    bottomBarPadding: Dp,
     restoreCheckpoint: (ReaderEvent.OnRestoreCheckpoint) -> Unit,
     scroll: (ReaderEvent.OnScroll) -> Unit,
     changeProgress: (ReaderEvent.OnChangeProgress) -> Unit
@@ -65,7 +68,7 @@ fun ReaderBottomBar(
         }
     }
 
-    val arrowDirection by remember {
+    val arrowDirection = remember(checkpoint.index, listState.firstVisibleItemIndex) {
         derivedStateOf {
             val checkpointIndex = checkpoint.index
             val index = listState.firstVisibleItemIndex
@@ -77,7 +80,7 @@ fun ReaderBottomBar(
             }
         }
     }
-    val checkpointProgress by remember {
+    val checkpointProgress = remember(checkpoint.index, text.lastIndex) {
         derivedStateOf {
             (checkpoint.index / text.lastIndex.toFloat()) * 0.987f
         }
@@ -89,22 +92,23 @@ fun ReaderBottomBar(
             .background(Colors.readerSystemBarsColor)
             .noRippleClickable(onClick = {})
             .navigationBarsPadding()
-            .padding(horizontal = 18.dp)
-            .padding(top = 16.dp),
+            .padding(horizontal = 18.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        Spacer(Modifier.height(16.dp))
+
         Text(
             text = progress.value,
             color = MaterialTheme.colorScheme.onSurface,
             style = MaterialTheme.typography.titleLarge
         )
-        Row(
-            modifier = Modifier.padding(top = 3.dp, bottom = 5.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+
+        Spacer(Modifier.height(6.dp))
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
             HorizontalExpandingTransition(
-                visible = arrowDirection == Direction.START,
+                visible = arrowDirection.value == Direction.START,
                 startDirection = true
             ) {
                 IconButton(
@@ -130,13 +134,13 @@ fun ReaderBottomBar(
                     changeProgress = changeProgress
                 )
 
-                if (arrowDirection != Direction.NEUTRAL) {
-                    ReaderBottomBarSliderIndicator(progress = checkpointProgress)
+                if (arrowDirection.value != Direction.NEUTRAL) {
+                    ReaderBottomBarSliderIndicator(progress = checkpointProgress.value)
                 }
             }
 
             HorizontalExpandingTransition(
-                visible = arrowDirection == Direction.END,
+                visible = arrowDirection.value == Direction.END,
                 startDirection = false
             ) {
                 IconButton(
@@ -150,5 +154,7 @@ fun ReaderBottomBar(
                 }
             }
         }
+
+        Spacer(Modifier.height(8.dp + bottomBarPadding))
     }
 }

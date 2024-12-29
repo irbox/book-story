@@ -205,9 +205,10 @@
     <string name="font_reader_settings">Font</string>
     <string name="text_reader_settings">Text</string>
     <string name="translator_reader_settings">Translator</string>
-    <string name="padding_reader_settings">Padding</string>
+    <string name="padding_reader_settings">Margins</string>
     <string name="misc_reader_settings">Misc</string>
     <string name="reading_speed_reader_settings">Reading speed</string>
+    <string name="reading_mode_reader_settings">Reading mode</string>
     <string name="system_reader_settings">System</string>
     <string name="theme_appearance_settings">Theme preferences</string>
     <string name="colors_appearance_settings">Colors</string>
@@ -239,32 +240,36 @@
     <string name="color_preset_option">Color preset</string>
     <string name="background_color_option">Background color</string>
     <string name="font_color_option">Font color</string>
-    <string name="side_padding_option">Side padding</string>
-    <string name="vertical_padding_option">Vertical padding</string>
+    <string name="side_padding_option">Side margins</string>
+    <string name="vertical_padding_option">Vertical margins</string>
     <string name="double_click_translation_option">Double click translation</string>
     <string name="double_click_translation_option_desc">Double click on paragraph to translate it</string>
     <string name="fast_color_preset_change_option">Fast color preset change</string>
     <string name="fast_color_preset_change_option_desc">Swipe top bar left or right to change color preset</string>
     <string name="text_alignment_option">Text alignment</string>
     <string name="letter_spacing_option">Letter spacing</string>
-    <string name="cutout_padding_option">Cutout padding</string>
-    <string name="cutout_padding_option_desc">Apply padding to cutout area</string>
+    <string name="cutout_padding_option">Cutout margin</string>
+    <string name="cutout_padding_option_desc">Apply margin to the cutout area</string>
     <string name="fullscreen_option">Fullscreen</string>
-    <string name="fullscreen_option_desc">Hide system bars and remove padding</string>
+    <string name="fullscreen_option_desc">Hide system bars and remove margins</string>
     <string name="keep_screen_on_option">Keep screen on</string>
     <string name="hide_bars_on_fast_scroll_option">Hide bars on fast scroll</string>
     <string name="perception_expander_option">Perception expander</string>
     <string name="perception_expander_option_desc">
         Increase your reading speed by focusing on center
     </string>
-    <string name="perception_expander_padding_option">Perception expander line padding</string>
-    <string name="perception_expander_thickness_option">Perception expander line thickness</string>
+    <string name="perception_expander_padding_option">Line side margin</string>
+    <string name="perception_expander_thickness_option">Line thickness</string>
     <string name="check_for_text_update_option">Check for text update</string>
     <string name="check_for_text_update_option_desc">Automatically check whether there is text update</string>
     <string name="check_for_text_update_toast_option">Show \"text is up-to-date\" toast</string>
     <string name="screen_orientation_option">Screen orientation</string>
     <string name="custom_screen_brightness_option">Custom brightness</string>
     <string name="screen_brightness_option">Brightness</string>
+    <string name="horizontal_gesture_option">Horizontal gesture</string>
+    <string name="horizontal_gesture_scroll_option">Scroll fraction</string>
+    <string name="horizontal_gesture_sensitivity_option">Sensitivity</string>
+    <string name="bottom_bar_padding_option">Bottom bar margin</string>
 
     <!-- Browse -->
     <string name="browse_files_structure_option">Files structure</string>
@@ -331,6 +336,11 @@
     <string name="screen_orientation_landscape">Landscape</string>
     <string name="screen_orientation_locked_portrait">Locked portrait</string>
     <string name="screen_orientation_locked_landscape">Locked landscape</string>
+
+    <!-- Horizontal Gesture properties -->
+    <string name="horizontal_gesture_off">Off</string>
+    <string name="horizontal_gesture_on">On</string>
+    <string name="horizontal_gesture_inverse">On (Inverse)</string>
 
     <!-- Themes -->
     <string name="dynamic_theme">Mercury</string>
@@ -407,14 +417,6 @@
     <string name="credits_ideas">Ideas</string>
 
     <!-- Help -->
-    <string name="help_clickable_note_1">Please note, that</string>
-    <string name="help_clickable_note_2">such highlighted text</string>
-    <string name="help_clickable_note_3">
-        can be clicked.
-        Also you can hide this note by clicking the icon, try it out!
-    </string>
-    <string name="help_clickable_note_action">I\'m clickable!</string>
-
     <string name="help_title_how_to_add_books">How do I add books to the Library?</string>
     <string name="help_desc_how_to_add_books_1">Go to the</string>
     <string name="help_desc_how_to_add_books_2">Browse</string>
@@ -561,7 +563,7 @@
         First, enable it in the Reader settings(see: How do I customize the Reader?).
         Once enabled, two vertical lines will appear on either side of the Reader.
         To optimize your reading speed further,
-        adjust the padding to create less space around the center.
+        adjust the margin to create less space around the center.
         To use it, focus on the center of the screen while
         allowing your peripheral vision to pick up the text on the sides.
         As you read, maintain your focus on the center without directly
@@ -620,7 +622,6 @@
     <string name="revert_content_desc">Revert</string>
     <string name="selected_content_desc">Selected</string>
     <string name="app_icon_content_desc">App icon</string>
-    <string name="note_content_desc">Note</string>
     <string name="delete_history_element_content_desc">Delete history element</string>
     <string name="library_content_desc">Your library</string>
     <string name="history_content_desc">Reading history</string>

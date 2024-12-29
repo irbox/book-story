@@ -12,16 +12,15 @@ import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.shouldShowRationale
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import ua.acclorite.book_story.R
@@ -41,7 +40,6 @@ import java.io.File
 import javax.inject.Inject
 import kotlin.collections.map
 
-@OptIn(FlowPreview::class)
 @HiltViewModel
 class BrowseModel @Inject constructor(
     private val getFilesFromDevice: GetFilesFromDevice,
@@ -49,6 +47,8 @@ class BrowseModel @Inject constructor(
     private val getBookFromFile: GetBookFromFile,
     private val insertBook: InsertBook
 ) : ViewModel() {
+
+    private val mutex = Mutex()
 
     private val _state = MutableStateFlow(BrowseState())
     val state = _state.asStateFlow()
@@ -60,7 +60,7 @@ class BrowseModel @Inject constructor(
 
         /* Observe channel - - - - - - - - - - - */
         viewModelScope.launch(Dispatchers.IO) {
-            BrowseScreen.refreshListChannel.receiveAsFlow().debounce(200).collectLatest {
+            BrowseScreen.refreshListChannel.receiveAsFlow().collectLatest {
                 onEvent(BrowseEvent.OnRefreshList(showIndicator = false, hideSearch = false))
             }
         }
@@ -122,27 +122,31 @@ class BrowseModel @Inject constructor(
             }
 
             is BrowseEvent.OnRequestFocus -> {
-                if (!_state.value.hasFocused) {
-                    event.focusRequester.requestFocus()
-                    _state.update {
-                        it.copy(
-                            hasFocused = true
-                        )
+                viewModelScope.launch(Dispatchers.Main) {
+                    if (!_state.value.hasFocused) {
+                        event.focusRequester.requestFocus()
+                        _state.update {
+                            it.copy(
+                                hasFocused = true
+                            )
+                        }
                     }
                 }
             }
 
             is BrowseEvent.OnSearchQueryChange -> {
-                _state.update {
-                    it.copy(
-                        searchQuery = event.query
-                    )
-                }
-                changeSearchQueryJob?.cancel()
-                changeSearchQueryJob = viewModelScope.launch(Dispatchers.IO) {
-                    delay(500)
-                    yield()
-                    onEvent(BrowseEvent.OnSearch)
+                viewModelScope.launch {
+                    _state.update {
+                        it.copy(
+                            searchQuery = event.query
+                        )
+                    }
+                    changeSearchQueryJob?.cancel()
+                    changeSearchQueryJob = launch(Dispatchers.IO) {
+                        delay(500)
+                        yield()
+                        onEvent(BrowseEvent.OnSearch)
+                    }
                 }
             }
 
@@ -295,18 +299,22 @@ class BrowseModel @Inject constructor(
             }
 
             is BrowseEvent.OnShowFilterBottomSheet -> {
-                _state.update {
-                    it.copy(
-                        bottomSheet = BrowseScreen.FILTER_BOTTOM_SHEET
-                    )
+                viewModelScope.launch {
+                    _state.update {
+                        it.copy(
+                            bottomSheet = BrowseScreen.FILTER_BOTTOM_SHEET
+                        )
+                    }
                 }
             }
 
             is BrowseEvent.OnDismissBottomSheet -> {
-                _state.update {
-                    it.copy(
-                        bottomSheet = null
-                    )
+                viewModelScope.launch {
+                    _state.update {
+                        it.copy(
+                            bottomSheet = null
+                        )
+                    }
                 }
             }
 
@@ -416,20 +424,22 @@ class BrowseModel @Inject constructor(
             }
 
             is BrowseEvent.OnDismissPermissionDialog -> {
-                val legacyPermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.R
-                val isPermissionGranted = if (!legacyPermission) {
-                    Environment.isExternalStorageManager()
-                } else event.storagePermissionState.status.isGranted
+                viewModelScope.launch {
+                    val legacyPermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.R
+                    val isPermissionGranted = if (!legacyPermission) {
+                        Environment.isExternalStorageManager()
+                    } else event.storagePermissionState.status.isGranted
 
-                storagePermissionJob?.cancel()
-                _state.update { it.copy(dialog = null) }
+                    storagePermissionJob?.cancel()
+                    _state.update { it.copy(dialog = null) }
 
-                if (isPermissionGranted) {
-                    viewModelScope.launch(Dispatchers.IO) {
-                        getFilesFromDownloads()
+                    if (isPermissionGranted) {
+                        viewModelScope.launch(Dispatchers.IO) {
+                            getFilesFromDownloads()
+                        }
+                    } else {
+                        _state.update { it.copy(isError = true) }
                     }
-                } else {
-                    _state.update { it.copy(isError = true) }
                 }
             }
 
@@ -487,12 +497,14 @@ class BrowseModel @Inject constructor(
             }
 
             is BrowseEvent.OnDismissAddDialog -> {
-                _state.update {
-                    it.copy(
-                        dialog = null
-                    )
+                viewModelScope.launch {
+                    _state.update {
+                        it.copy(
+                            dialog = null
+                        )
+                    }
+                    getAddDialogBooksJob?.cancel()
                 }
-                getAddDialogBooksJob?.cancel()
             }
 
             is BrowseEvent.OnActionAddDialog -> {
@@ -532,7 +544,7 @@ class BrowseModel @Inject constructor(
                         return@launch
                     }
 
-                    LibraryScreen.refreshListChannel.trySend(Unit)
+                    LibraryScreen.refreshListChannel.trySend(0)
                     LibraryScreen.scrollToPageCompositionChannel.trySend(0)
 
                     event.navigateToLibrary()
@@ -577,10 +589,12 @@ class BrowseModel @Inject constructor(
             }
 
             is BrowseEvent.OnDismissDialog -> {
-                _state.update {
-                    it.copy(
-                        dialog = null
-                    )
+                viewModelScope.launch {
+                    _state.update {
+                        it.copy(
+                            dialog = null
+                        )
+                    }
                 }
             }
         }
@@ -604,8 +618,10 @@ class BrowseModel @Inject constructor(
     }
 
     fun resetScreen() {
-        storagePermissionJob?.cancel()
-        _state.update { it.copy(isError = false) }
+        viewModelScope.launch {
+            storagePermissionJob?.cancel()
+            _state.update { it.copy(isError = false) }
+        }
     }
 
     fun filterList(
@@ -712,5 +728,11 @@ class BrowseModel @Inject constructor(
                     }
                 )
             )
+    }
+
+    private suspend inline fun <T> MutableStateFlow<T>.update(function: (T) -> T) {
+        mutex.withLock {
+            this.value = function(this.value)
+        }
     }
 }

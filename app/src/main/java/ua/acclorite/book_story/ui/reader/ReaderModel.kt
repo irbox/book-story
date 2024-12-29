@@ -22,8 +22,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import ua.acclorite.book_story.R
@@ -53,6 +54,8 @@ class ReaderModel @Inject constructor(
     private val getLatestHistory: GetLatestHistory,
     private val checkForTextUpdate: CheckForTextUpdate
 ) : ViewModel() {
+
+    private val mutex = Mutex()
 
     private val _state = MutableStateFlow(ReaderState())
     val state = _state.asStateFlow()
@@ -89,8 +92,8 @@ class ReaderModel @Inject constructor(
 
                         updateBook.execute(_state.value.book)
 
-                        LibraryScreen.refreshListChannel.trySend(Unit)
-                        HistoryScreen.refreshListChannel.trySend(Unit)
+                        LibraryScreen.refreshListChannel.trySend(0)
+                        HistoryScreen.refreshListChannel.trySend(0)
 
                         launch {
                             snapshotFlow {
@@ -170,8 +173,8 @@ class ReaderModel @Inject constructor(
 
                         updateBook.execute(_state.value.book)
 
-                        LibraryScreen.refreshListChannel.trySend(Unit)
-                        HistoryScreen.refreshListChannel.trySend(Unit)
+                        LibraryScreen.refreshListChannel.trySend(300)
+                        HistoryScreen.refreshListChannel.trySend(300)
                     }
                 }
 
@@ -251,8 +254,8 @@ class ReaderModel @Inject constructor(
 
                             updateBook.execute(_state.value.book)
 
-                            LibraryScreen.refreshListChannel.trySend(Unit)
-                            HistoryScreen.refreshListChannel.trySend(Unit)
+                            LibraryScreen.refreshListChannel.trySend(0)
+                            HistoryScreen.refreshListChannel.trySend(0)
                         }
 
                         WindowCompat.getInsetsController(
@@ -550,12 +553,13 @@ class ReaderModel @Inject constructor(
                 return@launch
             }
 
+            eventJob.cancel()
+            eventJob.join()
+            eventJob = SupervisorJob()
+
             _state.update {
                 ReaderState(book = book)
             }
-
-            eventJob.cancel()
-            eventJob = SupervisorJob()
 
             onEvent(
                 ReaderEvent.OnMenuVisibility(
@@ -599,19 +603,21 @@ class ReaderModel @Inject constructor(
 
                 updateBook.execute(_state.value.book)
 
-                LibraryScreen.refreshListChannel.trySend(Unit)
-                HistoryScreen.refreshListChannel.trySend(Unit)
+                LibraryScreen.refreshListChannel.trySend(0)
+                HistoryScreen.refreshListChannel.trySend(0)
             }
         }
     }
 
     private fun updateChapter(index: Int) {
-        val (currentChapter, currentChapterProgress) = calculateCurrentChapter(index)
-        _state.update {
-            it.copy(
-                currentChapter = currentChapter,
-                currentChapterProgress = currentChapterProgress
-            )
+        viewModelScope.launch {
+            val (currentChapter, currentChapterProgress) = calculateCurrentChapter(index)
+            _state.update {
+                it.copy(
+                    currentChapter = currentChapter,
+                    currentChapterProgress = currentChapterProgress
+                )
+            }
         }
     }
 
@@ -672,12 +678,14 @@ class ReaderModel @Inject constructor(
 
     fun resetScreen() {
         viewModelScope.launch(Dispatchers.Main) {
-            _state.update {
-                ReaderState()
-            }
-
             eventJob.cancel()
             eventJob = SupervisorJob()
+        }
+    }
+
+    private suspend inline fun <T> MutableStateFlow<T>.update(function: (T) -> T) {
+        mutex.withLock {
+            this.value = function(this.value)
         }
     }
 }

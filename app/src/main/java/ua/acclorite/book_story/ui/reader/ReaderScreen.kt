@@ -161,6 +161,9 @@ data class ReaderScreen(val bookId: Int) : Screen, Parcelable {
         ) {
             (mainState.value.perceptionExpanderThickness * 0.25f).dp
         }
+        val horizontalGestureSensitivity = remember(mainState.value.horizontalGestureSensitivity) {
+            (36f + mainState.value.horizontalGestureSensitivity * (4f - 36f)).dp
+        }
 
         val density = LocalDensity.current
         val layoutDirection = LocalLayoutDirection.current
@@ -217,6 +220,9 @@ data class ReaderScreen(val bookId: Int) : Screen, Parcelable {
                     this
                 }
             )
+        }
+        val bottomBarPadding = remember(mainState.value.bottomBarPadding) {
+            (mainState.value.bottomBarPadding * 4f).dp
         }
 
         val chapters = remember(state.value.book.chapters) {
@@ -316,8 +322,12 @@ data class ReaderScreen(val bookId: Int) : Screen, Parcelable {
             chapters = chapters,
             contentPadding = contentPadding,
             verticalPadding = verticalPadding,
+            horizontalGesture = mainState.value.horizontalGesture,
+            horizontalGestureScroll = mainState.value.horizontalGestureScroll,
+            horizontalGestureSensitivity = horizontalGestureSensitivity,
             paragraphHeight = paragraphHeight,
             sidePadding = sidePadding,
+            bottomBarPadding = bottomBarPadding,
             backgroundColor = backgroundColor.value,
             fontColor = fontColor.value,
             fontFamily = fontFamily,

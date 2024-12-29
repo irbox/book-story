@@ -4,16 +4,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import ua.acclorite.book_story.R
@@ -27,13 +26,14 @@ import ua.acclorite.book_story.ui.browse.BrowseScreen
 import ua.acclorite.book_story.ui.history.HistoryScreen
 import javax.inject.Inject
 
-@OptIn(FlowPreview::class)
 @HiltViewModel
 class LibraryModel @Inject constructor(
     private val getBooks: GetBooks,
     private val deleteBooks: DeleteBooks,
     private val moveBooks: UpdateBook
 ) : ViewModel() {
+
+    private val mutex = Mutex()
 
     private val _state = MutableStateFlow(LibraryState())
     val state = _state.asStateFlow()
@@ -45,7 +45,10 @@ class LibraryModel @Inject constructor(
 
         /* Observe channel - - - - - - - - - - - */
         viewModelScope.launch(Dispatchers.IO) {
-            LibraryScreen.refreshListChannel.receiveAsFlow().debounce(200).collectLatest {
+            LibraryScreen.refreshListChannel.receiveAsFlow().collectLatest {
+                delay(it)
+                yield()
+
                 onEvent(LibraryEvent.OnRefreshList(showIndicator = false, hideSearch = false))
             }
         }
@@ -104,16 +107,18 @@ class LibraryModel @Inject constructor(
             }
 
             is LibraryEvent.OnSearchQueryChange -> {
-                _state.update {
-                    it.copy(
-                        searchQuery = event.query
-                    )
-                }
-                searchQueryChange?.cancel()
-                searchQueryChange = viewModelScope.launch(Dispatchers.IO) {
-                    delay(500)
-                    yield()
-                    onEvent(LibraryEvent.OnSearch)
+                viewModelScope.launch {
+                    _state.update {
+                        it.copy(
+                            searchQuery = event.query
+                        )
+                    }
+                    searchQueryChange?.cancel()
+                    searchQueryChange = launch(Dispatchers.IO) {
+                        delay(500)
+                        yield()
+                        onEvent(LibraryEvent.OnSearch)
+                    }
                 }
             }
 
@@ -124,12 +129,14 @@ class LibraryModel @Inject constructor(
             }
 
             is LibraryEvent.OnRequestFocus -> {
-                if (!_state.value.hasFocused) {
-                    event.focusRequester.requestFocus()
-                    _state.update {
-                        it.copy(
-                            hasFocused = true
-                        )
+                viewModelScope.launch(Dispatchers.Main) {
+                    if (!_state.value.hasFocused) {
+                        event.focusRequester.requestFocus()
+                        _state.update {
+                            it.copy(
+                                hasFocused = true
+                            )
+                        }
                     }
                 }
             }
@@ -163,10 +170,12 @@ class LibraryModel @Inject constructor(
             }
 
             is LibraryEvent.OnShowMoveDialog -> {
-                _state.update {
-                    it.copy(
-                        dialog = LibraryScreen.MOVE_DIALOG
-                    )
+                viewModelScope.launch {
+                    _state.update {
+                        it.copy(
+                            dialog = LibraryScreen.MOVE_DIALOG
+                        )
+                    }
                 }
             }
 
@@ -197,7 +206,7 @@ class LibraryModel @Inject constructor(
                         )
                     }
 
-                    HistoryScreen.refreshListChannel.trySend(Unit)
+                    HistoryScreen.refreshListChannel.trySend(0)
                     LibraryScreen.scrollToPageCompositionChannel.trySend(
                         event.categories.dropLastWhile {
                             it.category != event.selectedCategory
@@ -213,10 +222,12 @@ class LibraryModel @Inject constructor(
             }
 
             is LibraryEvent.OnShowDeleteDialog -> {
-                _state.update {
-                    it.copy(
-                        dialog = LibraryScreen.DELETE_DIALOG
-                    )
+                viewModelScope.launch {
+                    _state.update {
+                        it.copy(
+                            dialog = LibraryScreen.DELETE_DIALOG
+                        )
+                    }
                 }
             }
 
@@ -237,7 +248,7 @@ class LibraryModel @Inject constructor(
                         )
                     }
 
-                    HistoryScreen.refreshListChannel.trySend(Unit)
+                    HistoryScreen.refreshListChannel.trySend(0)
                     BrowseScreen.refreshListChannel.trySend(Unit)
 
                     withContext(Dispatchers.Main) {
@@ -249,10 +260,12 @@ class LibraryModel @Inject constructor(
             }
 
             is LibraryEvent.OnDismissDialog -> {
-                _state.update {
-                    it.copy(
-                        dialog = null
-                    )
+                viewModelScope.launch {
+                    _state.update {
+                        it.copy(
+                            dialog = null
+                        )
+                    }
                 }
             }
         }
@@ -271,6 +284,12 @@ class LibraryModel @Inject constructor(
                 books = books,
                 isLoading = false
             )
+        }
+    }
+
+    private suspend inline fun <T> MutableStateFlow<T>.update(function: (T) -> T) {
+        mutex.withLock {
+            this.value = function(this.value)
         }
     }
 }

@@ -43,6 +43,10 @@ object DataStoreConstants {
     val SCREEN_ORIENTATION = stringPreferencesKey("screen_orientation")
     val CUSTOM_SCREEN_BRIGHTNESS = booleanPreferencesKey("custom_screen_brightness")
     val SCREEN_BRIGHTNESS = doublePreferencesKey("screen_brightness")
+    val HORIZONTAL_GESTURE = stringPreferencesKey("horizontal_gesture")
+    val HORIZONTAL_GESTURE_SCROLL = doublePreferencesKey("horizontal_gesture_scroll")
+    val HORIZONTAL_GESTURE_SENSITIVITY = doublePreferencesKey("horizontal_gesture_sensitivity")
+    val BOTTOM_BAR_PADDING = intPreferencesKey("bottom_bar_padding")
 
     // Browse settings
     val BROWSE_FILES_STRUCTURE = stringPreferencesKey("browse_files_structure")

@@ -18,8 +18,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import ua.acclorite.book_story.R
@@ -54,6 +55,8 @@ class BookInfoModel @Inject constructor(
     private val deleteBooks: DeleteBooks,
     private val updateBookWithText: UpdateBookWithText
 ) : ViewModel() {
+
+    private val mutex = Mutex()
 
     private val _state = MutableStateFlow(BookInfoState())
     val state = _state.asStateFlow()
@@ -224,8 +227,8 @@ class BookInfoModel @Inject constructor(
                             )
                         }
 
-                        LibraryScreen.refreshListChannel.trySend(Unit)
-                        HistoryScreen.refreshListChannel.trySend(Unit)
+                        LibraryScreen.refreshListChannel.trySend(0)
+                        HistoryScreen.refreshListChannel.trySend(0)
 
                         if (_state.value.editTitle) {
                             onEvent(BookInfoEvent.OnEditTitleMode(false))
@@ -302,8 +305,8 @@ class BookInfoModel @Inject constructor(
                             )
                         }
 
-                        LibraryScreen.refreshListChannel.trySend(Unit)
-                        HistoryScreen.refreshListChannel.trySend(Unit)
+                        LibraryScreen.refreshListChannel.trySend(0)
+                        HistoryScreen.refreshListChannel.trySend(0)
 
                         withContext(Dispatchers.Main) {
                             event.context.getString(R.string.cover_image_changed)
@@ -347,8 +350,8 @@ class BookInfoModel @Inject constructor(
                                 .showToast(context = event.context)
                         }
 
-                        LibraryScreen.refreshListChannel.trySend(Unit)
-                        HistoryScreen.refreshListChannel.trySend(Unit)
+                        LibraryScreen.refreshListChannel.trySend(0)
+                        HistoryScreen.refreshListChannel.trySend(0)
                     }
                 }
 
@@ -372,8 +375,8 @@ class BookInfoModel @Inject constructor(
                             )
                         }
 
-                        LibraryScreen.refreshListChannel.trySend(Unit)
-                        HistoryScreen.refreshListChannel.trySend(Unit)
+                        LibraryScreen.refreshListChannel.trySend(0)
+                        HistoryScreen.refreshListChannel.trySend(0)
 
                         withContext(Dispatchers.Main) {
                             event.context.getString(R.string.cover_image_deleted)
@@ -384,12 +387,13 @@ class BookInfoModel @Inject constructor(
 
                 is BookInfoEvent.OnCheckCoverReset -> {
                     launch(Dispatchers.IO) {
-                        _state.update {
-                            it.copy(
-                                canResetCover = canResetCover.execute(
-                                    _state.value.book.id
+                        if (_state.value.book.id == -1) return@launch
+                        canResetCover.execute(_state.value.book.id).apply {
+                            _state.update {
+                                it.copy(
+                                    canResetCover = this
                                 )
-                            )
+                            }
                         }
                     }
                 }
@@ -437,8 +441,8 @@ class BookInfoModel @Inject constructor(
 
                         deleteBooks.execute(listOf(_state.value.book))
 
-                        LibraryScreen.refreshListChannel.trySend(Unit)
-                        HistoryScreen.refreshListChannel.trySend(Unit)
+                        LibraryScreen.refreshListChannel.trySend(0)
+                        HistoryScreen.refreshListChannel.trySend(0)
                         BrowseScreen.refreshListChannel.trySend(Unit)
 
                         withContext(Dispatchers.Main) {
@@ -476,13 +480,13 @@ class BookInfoModel @Inject constructor(
                         }
                         updateBook.execute(_state.value.book)
 
-                        LibraryScreen.refreshListChannel.trySend(Unit)
+                        LibraryScreen.refreshListChannel.trySend(0)
                         LibraryScreen.scrollToPageCompositionChannel.trySend(
                             Category.entries.dropLastWhile {
                                 it != event.category
                             }.size - 1
                         )
-                        HistoryScreen.refreshListChannel.trySend(Unit)
+                        HistoryScreen.refreshListChannel.trySend(0)
 
                         withContext(Dispatchers.Main) {
                             event.context.getString(R.string.book_moved)
@@ -717,8 +721,8 @@ class BookInfoModel @Inject constructor(
                                 )
                             }
 
-                            LibraryScreen.refreshListChannel.trySend(Unit)
-                            HistoryScreen.refreshListChannel.trySend(Unit)
+                            LibraryScreen.refreshListChannel.trySend(0)
+                            HistoryScreen.refreshListChannel.trySend(0)
 
                             onEvent(
                                 BookInfoEvent.OnShowSnackbar(
@@ -780,15 +784,15 @@ class BookInfoModel @Inject constructor(
                 return@launch
             }
 
+            eventJob.cancel()
+            eventJob.join()
+            eventJob = SupervisorJob()
+
             _state.update {
                 BookInfoState(
                     book = book
                 )
             }
-
-            eventJob.cancel()
-            eventJob.join()
-            eventJob = SupervisorJob()
 
             if (startUpdate) {
                 onEvent(
@@ -804,13 +808,14 @@ class BookInfoModel @Inject constructor(
 
     fun resetScreen() {
         viewModelScope.launch(Dispatchers.Main) {
-            _state.update {
-                BookInfoState()
-            }
-
             eventJob.cancel()
-            eventJob.join()
             eventJob = SupervisorJob()
+        }
+    }
+
+    private suspend inline fun <T> MutableStateFlow<T>.update(function: (T) -> T) {
+        mutex.withLock {
+            this.value = function(this.value)
         }
     }
 }

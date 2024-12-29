@@ -5,16 +5,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import ua.acclorite.book_story.R
@@ -35,7 +34,6 @@ import javax.inject.Inject
 import kotlin.collections.component1
 import kotlin.collections.component2
 
-@OptIn(FlowPreview::class)
 @HiltViewModel
 class HistoryModel @Inject constructor(
     private val getHistory: GetHistory,
@@ -44,6 +42,8 @@ class HistoryModel @Inject constructor(
     private val deleteHistory: DeleteHistory,
     private val deleteWholeHistory: DeleteWholeHistory
 ) : ViewModel() {
+
+    private val mutex = Mutex()
 
     private val _state = MutableStateFlow(HistoryState())
     val state = _state.asStateFlow()
@@ -60,24 +60,29 @@ class HistoryModel @Inject constructor(
 
         /* Observe channel - - - - - - - - - - - */
         viewModelScope.launch(Dispatchers.IO) {
-            HistoryScreen.refreshListChannel.receiveAsFlow().debounce(200).collectLatest {
+            HistoryScreen.refreshListChannel.receiveAsFlow().collectLatest {
+                delay(it)
+                yield()
+
                 onEvent(HistoryEvent.OnRefreshList(showIndicator = false, hideSearch = false))
             }
         }
         viewModelScope.launch(Dispatchers.IO) {
-            HistoryScreen.insertHistoryChannel.receiveAsFlow().debounce(200)
-                .collectLatest {
-                    insertHistory.execute(
-                        History(
-                            bookId = it,
-                            book = null,
-                            time = Date().time
-                        )
+            HistoryScreen.insertHistoryChannel.receiveAsFlow().collectLatest {
+                insertHistory.execute(
+                    History(
+                        bookId = it,
+                        book = null,
+                        time = Date().time
                     )
+                )
 
-                    getHistoryFromDatabase()
-                    LibraryScreen.refreshListChannel.trySend(Unit)
-                }
+                delay(500)
+                yield()
+
+                getHistoryFromDatabase()
+                LibraryScreen.refreshListChannel.trySend(0)
+            }
         }
         /* - - - - - - - - - - - - - - - - - - - */
     }
@@ -134,27 +139,31 @@ class HistoryModel @Inject constructor(
             }
 
             is HistoryEvent.OnRequestFocus -> {
-                if (!_state.value.hasFocused) {
-                    event.focusRequester.requestFocus()
-                    _state.update {
-                        it.copy(
-                            hasFocused = true
-                        )
+                viewModelScope.launch(Dispatchers.Main) {
+                    if (!_state.value.hasFocused) {
+                        event.focusRequester.requestFocus()
+                        _state.update {
+                            it.copy(
+                                hasFocused = true
+                            )
+                        }
                     }
                 }
             }
 
             is HistoryEvent.OnSearchQueryChange -> {
-                _state.update {
-                    it.copy(
-                        searchQuery = event.query
-                    )
-                }
-                searchQueryChange?.cancel()
-                searchQueryChange = viewModelScope.launch(Dispatchers.IO) {
-                    delay(500)
-                    yield()
-                    onEvent(HistoryEvent.OnSearch)
+                viewModelScope.launch {
+                    _state.update {
+                        it.copy(
+                            searchQuery = event.query
+                        )
+                    }
+                    searchQueryChange?.cancel()
+                    searchQueryChange = launch(Dispatchers.IO) {
+                        delay(500)
+                        yield()
+                        onEvent(HistoryEvent.OnSearch)
+                    }
                 }
             }
 
@@ -172,7 +181,7 @@ class HistoryModel @Inject constructor(
                     getHistoryFromDatabase()
                     _state.update { it.copy(isRefreshing = false) }
 
-                    LibraryScreen.refreshListChannel.trySend(Unit)
+                    LibraryScreen.refreshListChannel.trySend(0)
 
                     deleteHistoryEntry?.cancel()
                     event.snackbarState.currentSnackbarData?.dismiss()
@@ -195,7 +204,7 @@ class HistoryModel @Inject constructor(
                         SnackbarResult.Dismissed -> Unit
                         SnackbarResult.ActionPerformed -> {
                             insertHistory.execute(event.history)
-                            LibraryScreen.refreshListChannel.trySend(Unit)
+                            LibraryScreen.refreshListChannel.trySend(0)
 
                             _state.update { it.copy(isRefreshing = true) }
                             getHistoryFromDatabase()
@@ -207,10 +216,12 @@ class HistoryModel @Inject constructor(
             }
 
             is HistoryEvent.OnShowDeleteWholeHistoryDialog -> {
-                _state.update {
-                    it.copy(
-                        dialog = HistoryScreen.DELETE_WHOLE_HISTORY_DIALOG
-                    )
+                viewModelScope.launch {
+                    _state.update {
+                        it.copy(
+                            dialog = HistoryScreen.DELETE_WHOLE_HISTORY_DIALOG
+                        )
+                    }
                 }
             }
 
@@ -224,7 +235,7 @@ class HistoryModel @Inject constructor(
                     }
 
                     deleteWholeHistory.execute()
-                    LibraryScreen.refreshListChannel.trySend(Unit)
+                    LibraryScreen.refreshListChannel.trySend(0)
                     getHistoryFromDatabase("")
 
                     withContext(Dispatchers.Main) {
@@ -236,10 +247,12 @@ class HistoryModel @Inject constructor(
             }
 
             is HistoryEvent.OnDismissDialog -> {
-                _state.update {
-                    it.copy(
-                        dialog = null
-                    )
+                viewModelScope.launch {
+                    _state.update {
+                        it.copy(
+                            dialog = null
+                        )
+                    }
                 }
             }
         }
@@ -310,6 +323,12 @@ class HistoryModel @Inject constructor(
                 history = history,
                 isLoading = false,
             )
+        }
+    }
+
+    private suspend inline fun <T> MutableStateFlow<T>.update(function: (T) -> T) {
+        mutex.withLock {
+            this.value = function(this.value)
         }
     }
 }
